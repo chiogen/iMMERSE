@@ -39,6 +39,10 @@
 	Preprocessor settings
 =============================================================================*/
 
+#ifndef COMPUTE_MOTION
+	#define COMPUTE_MOTION              1       // 0=off, 1=on
+#endif
+
 #ifndef OPTICAL_FLOW_MATCHING_LAYERS 
  #define OPTICAL_FLOW_MATCHING_LAYERS 	1		//[0-2] 0=luma, 1=luma + depth, 2 = rgb + depth
 #endif
@@ -73,6 +77,11 @@ uniform bool ENABLE_SMOOTH_NORMALS <
 	"and does not contain normal maps and smoothing groups.\n"
 	"As a result, they represent the true (blocky) object shapes and lighting calculated\n"
 	"using them can make the low-poly appearance of geometry apparent.\n";
+	ui_category = "Normal Vectors";	
+> = false;
+
+uniform bool SMOOTH_NORMALS_PERFORMANCE <
+	ui_label = "Reduce computation time of normals smoothing, at the cost of quality.";
 	ui_category = "Normal Vectors";	
 > = false;
 
@@ -120,6 +129,9 @@ uniform int UIHELP <
 	ui_type = "radio";
 	ui_label = " ";	
 	ui_text ="\nDescription for preprocessor definitions:\n"
+	"\n"
+	"COMPUTE_MOTION\n"
+	"Switches motion passes on(1) or off(0)\n"
 	"\n"
 	"OPTICAL_FLOW_MATCHING_LAYERS\n"
 	"\n"
@@ -852,8 +864,18 @@ float2x3 to_tangent(float3 n)
 
 float4 smooth_normals_mkii(in VSOUT i, int iteration, sampler sGbuffer)
 {
-	int num_dirs = iteration ? 6 : 4;
-	int num_steps = iteration ? 3 : 6;	
+	int num_dirs = 0;
+	int num_steps = 0;
+
+	if (SMOOTH_NORMALS_PERFORMANCE) {
+		// Reduced loop iterations for more performance
+		num_dirs = iteration ? 6 : 4;
+		num_steps = iteration ? 3 : 3;
+	} else {
+		num_dirs = iteration ? 6 : 4;
+		num_steps = iteration ? 3 : 6;	
+	}
+
 	float radius_mult = iteration ? 0.2 : 1.0;	
 
 	float2 angle_tolerance = float2(45.0, 30.0); //min/max
@@ -1099,11 +1121,16 @@ technique MartysMods_Launchpad
         "______________________________________________________________________________";
 >
 {
+
+	// Normals
 	pass {VertexShader = MainVS;PixelShader = NormalsPS; RenderTarget = Deferred::NormalsTex; }		
 	pass {VertexShader = SmoothNormalsVS;PixelShader = SmoothNormalsMakeGbufPS;  RenderTarget = SmoothNormalsTempTex0;}
 	pass {VertexShader = SmoothNormalsVS;PixelShader = SmoothNormalsPass0PS;  RenderTarget = SmoothNormalsTempTex1;}
 	pass {VertexShader = SmoothNormalsVS;PixelShader = SmoothNormalsPass1PS;  RenderTarget = SmoothNormalsTempTex2;}
 	pass {VertexShader = SmoothNormalsVS;PixelShader = CopyNormalsPS; RenderTarget = Deferred::NormalsTex; }
+
+	// Motion
+#if COMPUTE_MOTION == 1
 #if OPTICAL_FLOW_MATCHING_LAYERS == 2
 	pass {VertexShader = MainVS;PixelShader  = CircularHarmonicsPrevPS;  RenderTarget0 = CircularHarmonicsPyramidPrev0; RenderTarget1 = CircularHarmonicsPyramidPrev1; }	
 #endif
@@ -1119,6 +1146,8 @@ technique MartysMods_Launchpad
     pass {VertexShader = MainVS;PixelShader = MotionPS1;RenderTarget = MotionTexIntermediate1;}
     pass {VertexShader = MainVS;PixelShader = MotionPS0;RenderTarget = MotionTexIntermediate0;}
 	pass {VertexShader = MainVS;PixelShader = WriteFeaturePS; RenderTarget = FeatureLayerPyramidPrev; }
+#endif
+
 #if LAUNCHPAD_DEBUG_OUTPUT != 0 //why waste perf for this pass in normal mode
 	pass {VertexShader = MainVS;PixelShader  = DebugPS;  }		
 #endif 
