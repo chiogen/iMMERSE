@@ -869,8 +869,8 @@ float4 smooth_normals_mkii(in VSOUT i, int iteration, sampler sGbuffer)
 
 	if (SMOOTH_NORMALS_PERFORMANCE) {
 		// Reduced loop iterations for more performance
-		num_dirs = iteration ? 6 : 4;
-		num_steps = iteration ? 3 : 3;
+		num_dirs = iteration ? 3 : 4;
+		num_steps = iteration ? 2 : 3;
 	} else {
 		num_dirs = iteration ? 6 : 4;
 		num_steps = iteration ? 3 : 6;	
